@@ -1,6 +1,6 @@
 import * as utils from "./utils";
 import { Session } from "inspector";
-
+import { PassThrough } from "stream";
 export default class Heap {
   session: Session;
 
@@ -33,42 +33,40 @@ export default class Heap {
   }
 
   stopTimeline() {
-    return new Promise<string>((resolve, reject) => {
-      const res: string[] = [];
-      const getChunk = (m: any) => {
-        res.push(m.params.chunk);
-      };
-      this.session.on("HeapProfiler.addHeapSnapshotChunk", getChunk);
-      this.session.post("HeapProfiler.stopTrackingHeapObjects", (err) => {
-        this.session.removeListener(
-          "HeapProfiler.addHeapSnapshotChunk",
-          getChunk
-        );
-        if (err) return reject(err);
-        resolve(res.join(""));
-      });
+    const stream = new PassThrough();
+    const getChunk = (m: any) => {
+      stream.push(m.params.chunk);
+    };
+    this.session.on("HeapProfiler.addHeapSnapshotChunk", getChunk);
+    this.session.post("HeapProfiler.stopTrackingHeapObjects", (err) => {
+      this.session.removeListener(
+        "HeapProfiler.addHeapSnapshotChunk",
+        getChunk
+      );
+      stream.emit("finish");
+      stream.emit("end");
+      stream.end();
+      if (err) throw err;
     });
+    return stream;
   }
 
   takeSnapshot() {
-    return new Promise<string>((resolve, reject) => {
-      const res: string[] = [];
-      const getChunk = (m: any) => {
-        res.push(m.params.chunk);
-      };
-      this.session.on("HeapProfiler.addHeapSnapshotChunk", getChunk);
-      this.session.post(
-        "HeapProfiler.takeHeapSnapshot",
-        undefined,
-        (err: any, _r: any) => {
-          this.session.removeListener(
-            "HeapProfiler.addHeapSnapshotChunk",
-            getChunk
-          );
-          if (err) return reject(err);
-          resolve(res.join(""));
-        }
+    const stream = new PassThrough();
+    const getChunk = (m: any) => {
+      stream.push(m.params.chunk);
+    };
+    this.session.on("HeapProfiler.addHeapSnapshotChunk", getChunk);
+    this.session.post("HeapProfiler.takeHeapSnapshot", (err: any, _r: any) => {
+      this.session.removeListener(
+        "HeapProfiler.addHeapSnapshotChunk",
+        getChunk
       );
+      stream.emit("finish");
+      stream.emit("end");
+      stream.end();
+      if (err) throw err;
     });
+    return stream;
   }
 }
